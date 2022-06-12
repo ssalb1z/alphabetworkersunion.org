@@ -10,6 +10,7 @@ import { classMap } from 'lit-html/directives/class-map.js';
 import { loadStripe, StripeCardElement, Token } from '@stripe/stripe-js';
 import { allCountries } from 'country-region-data';
 import { repeat } from 'lit/directives/repeat.js';
+import '@vaadin/combo-box';
 
 import styles from './signup.scss';
 
@@ -108,6 +109,25 @@ const ALPHABET_SUBSIDIARIES = [
   'Google Austria',
   'Google New Zealand',
 ];
+
+const ALPHABET_TEAMS_PER_PA: Map<string, string[]> = new Map([
+  ['CFO Org', ['BizOps', 'Google Finance', 'REWS & GSRS']],
+  ['Cloud', ['C&C', 'Google Cloud Platform', 'Cloud DEI']],
+  ['Community Efforts', []],
+  ['Core', []],
+  ['Devices and Services', []],
+  ['Global Affairs', []],
+  ['Global Business & Operations', []],
+  ['Google - advisors', []],
+  ['Knowledge & information', []],
+  ['Labs', []],
+  ['Learning & Education', []],
+  ['Marketing', []],
+  ['People Operations', []],
+  ['Platforms & Ecosystems', []],
+  ['Research', []],
+  ['YouTube', []],
+]);
 
 /**
  * Signup element.
@@ -228,6 +248,24 @@ export class Signup extends LitElement {
   private availableRegions = allCountries.find(
     (countryData) => countryData[1] === 'US'
   )[2];
+
+  @state()
+  private allTeams = Array.from(ALPHABET_TEAMS_PER_PA.values()).flat();
+
+  @state()
+  private availableTeams = this.allTeams;
+
+  @state()
+  private allProductAreas = Array.from(ALPHABET_TEAMS_PER_PA.keys());
+
+  @state()
+  private filteredProductAreas = Array.from(ALPHABET_TEAMS_PER_PA.keys());
+
+  @state()
+  private productAreaValue = '';
+
+  @state()
+  private teamValue = '';
 
   @state()
   private plaidToken?: PlaidToken;
@@ -806,29 +844,36 @@ export class Signup extends LitElement {
           />
         </label>
         <label>
+          <span class="title"
+            >Product area (PA)${this.optionalLabel('product-area')}</span
+          >
+          <span class="hint"></span>
+          <vaadin-combo-box
+            name="product-area"
+            aria-label="Product Area"
+            ?required=${this.isFieldRequired('product-area')}
+            autocomplete="off"
+            @value-changed=${this.productAreaChangeHandler}
+            .filteredItems="${this.filteredProductAreas}"
+            @filter-changed=${this.productAreaFilterChangeHandler}
+          ></vaadin-combo-box>
+        </label>
+        <label>
           <span class="title">Organization${this.optionalLabel('org')}</span>
           <span class="hint"
             >The larger team/department/organization of which your team is a
             part.</span
           >
-          <input
+          <vaadin-combo-box
             name="org"
+            allow-custom-value
             aria-label="Organization"
             ?required=${this.isFieldRequired('org')}
             autocomplete="off"
-          />
-        </label>
-        <label>
-          <span class="title"
-            >Product area (PA)${this.optionalLabel('product-area')}</span
-          >
-          <span class="hint"></span>
-          <input
-            name="product-area"
-            aria-label="Product Area"
-            ?required=${this.isFieldRequired('product-area')}
-            autocomplete="off"
-          />
+            @value-changed=${this.availableTeamChangeHandler}
+            .filteredItems="${this.availableTeams}"
+            @filter-changed="${this.availableTeamsFilterChangeHandler}"
+          ></vaadin-combo-box>
         </label>
         <label>
           <span class="title">Site code${this.optionalLabel('site-code')}</span>
@@ -1162,6 +1207,53 @@ export class Signup extends LitElement {
   }
 
   compChangeHandler(): void {
+    this.requestUpdate();
+  }
+
+  productAreaChangeHandler(): void {
+    this.productAreaValue = this.productArea.value;
+    if (ALPHABET_TEAMS_PER_PA.get(this.productArea.value) != undefined) {
+      this.availableTeams = ALPHABET_TEAMS_PER_PA.get(this.productArea.value);
+    }
+    this.requestUpdate();
+  }
+
+  productAreaFilterChangeHandler(e: CustomEvent): void {
+    const filter = e.detail.value as string;
+    const updatedFilteredProductAreas = [];
+    for (const pa of ALPHABET_TEAMS_PER_PA.keys()) {
+      if (pa.toLowerCase().includes(filter.toLowerCase())) {
+        updatedFilteredProductAreas.push(pa);
+      }
+    }
+    this.filteredProductAreas = updatedFilteredProductAreas;
+    this.requestUpdate();
+  }
+
+  availableTeamChangeHandler(): void {
+    this.teamValue = this.org.value;
+    // Update the PA to match the team, if we can find a match
+    for (const pa of ALPHABET_TEAMS_PER_PA.keys()) {
+      // Assume a team name can only appear in one PA and short-circuit if we find a match.
+      if (
+        ALPHABET_TEAMS_PER_PA.get(pa).find((elem) => elem === this.teamValue) !=
+        undefined
+      ) {
+        this.productAreaValue = pa;
+      }
+    }
+    this.requestUpdate();
+  }
+
+  availableTeamsFilterChangeHandler(e: CustomEvent): void {
+    const filter = e.detail.value as string;
+    let filteredTeams = this.allTeams;
+    if (ALPHABET_TEAMS_PER_PA.get(this.productAreaValue) != undefined) {
+      filteredTeams = ALPHABET_TEAMS_PER_PA.get(this.productArea.value);
+    }
+    this.availableTeams = filteredTeams.filter((team) =>
+      team.toLowerCase().includes(filter.toLowerCase())
+    );
     this.requestUpdate();
   }
 
